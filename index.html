@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Мини‑ферма</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            background: var(--tg-theme-bg-color, #f0f2f5);
+            color: var(--tg-theme-text-color, #1c1e21);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            padding: 16px;
+        }
+        #app {
+            width: 100%;
+            max-width: 400px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--tg-theme-secondary-bg-color, #ffffff);
+            border-radius: 20px;
+            padding: 12px 16px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        .balance {
+            font-weight: 600;
+            font-size: 1.2rem;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .premium-badge {
+            background: gold;
+            color: #333;
+            padding: 4px 8px;
+            border-radius: 30px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .shop-btn {
+            background: var(--tg-theme-button-color, #40a7e3);
+            color: var(--tg-theme-button-text-color, #ffffff);
+            border: none;
+            border-radius: 40px;
+            padding: 8px 16px;
+            font-weight: 500;
+            cursor: pointer;
+        }
+        .plots-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .plot {
+            aspect-ratio: 1 / 1;
+            background: var(--tg-theme-secondary-bg-color, #d9d9d9);
+            border-radius: 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 8px;
+            transition: 0.2s;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            cursor: pointer;
+            color: var(--tg-theme-text-color, #000);
+            font-size: 0.9rem;
+            text-align: center;
+        }
+        .plot.empty { background: #8bc34a; color: #1f4f1f; }
+        .plot.growing { background: #ffb74d; }
+        .plot.ready { background: #ff8a65; animation: pulse 1s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.8; } }
+        .plot.locked {
+            background: #bdbdbd;
+            color: #616161;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+        .timer { font-size: 0.8rem; font-weight: bold; margin-top: 4px; }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5);
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .modal.active { display: flex; }
+        .modal-content {
+            background: var(--tg-theme-bg-color, #fff);
+            border-radius: 24px;
+            padding: 24px;
+            width: 90%;
+            max-width: 340px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .modal-content h2 { margin-bottom: 16px; }
+        .shop-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--tg-theme-hint-color, #ccc);
+        }
+        .shop-item:last-child { border-bottom: none; }
+        .shop-item button {
+            background: var(--tg-theme-button-color, #40a7e3);
+            color: var(--tg-theme-button-text-color, #fff);
+            border: none;
+            border-radius: 40px;
+            padding: 6px 12px;
+            cursor: pointer;
+        }
+        .close-btn {
+            margin-top: 16px;
+            width: 100%;
+            background: #e0e0e0;
+            border: none;
+            border-radius: 40px;
+            padding: 10px;
+            cursor: pointer;
+        }
+        .footer-note {
+            font-size: 0.8rem;
+            color: var(--tg-theme-hint-color, #999);
+            text-align: center;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+<div id="app">
+    <!-- Шапка -->
+    <div class="header">
+        <div class="balance" id="balanceDisplay">🪙 0</div>
+        <div id="premiumDisplay" class="premium-badge" style="display: none;">⭐ Premium</div>
+        <button class="shop-btn" id="shopBtn">🛒 Магазин</button>
+    </div>
+
+    <!-- Сетка грядок -->
+    <div class="plots-grid" id="plotsContainer"></div>
+
+    <!-- Модалка магазина -->
+    <div class="modal" id="shopModal">
+        <div class="modal-content">
+            <h2>🛍️ Магазин</h2>
+            <div class="shop-item">
+                <span>50 монет</span>
+                <button id="buyCoins50">1 ⭐</button>
+            </div>
+            <div class="shop-item">
+                <span>200 монет</span>
+                <button id="buyCoins200">3 ⭐</button>
+            </div>
+            <div class="shop-item">
+                <span>Премиум (30 дней)</span>
+                <button id="buyPremium">5 ⭐</button>
+            </div>
+            <div class="shop-item">
+                <span>Новая грядка (50 монет)</span>
+                <button id="buyPlot">🪙 50</button>
+            </div>
+            <button class="close-btn" id="closeShop">Закрыть</button>
+        </div>
+    </div>
+
+    <div class="footer-note">🌱 нажми на грядку, чтобы посадить или собрать</div>
+</div>
+
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script>
+    (function() {
+        // Инициализация Telegram
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+        tg.expand();
+
+        // --- КОНСТАНТЫ И НАСТРОЙКИ ---
+        const GROW_TIME_BASE = 30000;        // 30 секунд
+        const GROW_TIME_PREMIUM = 15000;      // 15 секунд
+        const REWARD_BASE = 10;
+        const REWARD_PREMIUM = 20;
+        const MAX_PLOTS = 6;
+        const INITIAL_UNLOCKED = 2;
+
+        // Слагы товаров (ЗАМЕНИТЕ НА СВОИ ИЗ BOTFATHER)
+        const PRODUCTS = {
+            coins50: 'coin50_slug',       // товар на 50 монет за 1 Star
+            coins200: 'coin200_slug',     // товар на 200 монет за 3 Stars
+            premium30: 'premium30_slug',   // подписка 30 дней за 5 Stars
+        };
+
+        // --- СОСТОЯНИЕ ИГРОКА ---
+        let farmData = {
+            balance: 10,
+            plots: [],               // массив объектов { state, endTime } (endTime - timestamp или null)
+            unlockedPlots: INITIAL_UNLOCKED,
+            premiumUntil: null,       // timestamp окончания подписки или null
+            lastUpdate: Date.now()
+        };
+
+        // --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ: шифрование / дешифрование ---
+        function getKey() {
+            // Используем user.id как ключ; если нет – запасной ключ
+            const user = tg.initDataUnsafe?.user;
+            return user ? String(user.id) : 'fallback_secret_key_123';
+        }
+
+        function encryptData(obj) {
+            const json = JSON.stringify(obj);
+            const key = getKey();
+            const encoder = new TextEncoder();
+            const bytes = encoder.encode(json);
+            const keyBytes = encoder.encode(key);
+            const encrypted = new Uint8Array(bytes.length);
+            for (let i = 0; i < bytes.length; i++) {
+                encrypted[i] = bytes[i] ^ keyBytes[i % keyBytes.length];
+            }
+            // Преобразуем в base64 для безопасного хранения в CloudStorage
+            return btoa(String.fromCharCode(...encrypted));
+        }
+
+        function decryptData(encryptedBase64) {
+            try {
+                const encryptedStr = atob(encryptedBase64);
+                const encrypted = Uint8Array.from(encryptedStr, c => c.charCodeAt(0));
+                const key = getKey();
+                const keyBytes = new TextEncoder().encode(key);
+                const decrypted = new Uint8Array(encrypted.length);
+                for (let i = 0; i < encrypted.length; i++) {
+                    decrypted[i] = encrypted[i] ^ keyBytes[i % keyBytes.length];
+                }
+                const json = new TextDecoder().decode(decrypted);
+                return JSON.parse(json);
+            } catch (e) {
+                console.warn('Ошибка расшифровки, возвращаем начальное состояние', e);
+                return null;
+            }
+        }
+
+        // --- ЗАГРУЗКА / СОХРАНЕНИЕ В CLOUDSTORAGE ---
+        function loadFromCloud() {
+            tg.CloudStorage.getItem('farmData', (err, val) => {
+                if (err || !val) {
+                    console.log('Нет сохранённых данных, инициализация');
+                    initDefaultState();
+                } else {
+                    const decrypted = decryptData(val);
+                    if (decrypted) {
+                        farmData = decrypted;
+                    } else {
+                        initDefaultState();
+                    }
+                }
+                // После загрузки обновляем UI и запускаем таймеры
+                renderFarm();
+                startTimers();
+            });
+        }
+
+        function initDefaultState() {
+            farmData = {
+                balance: 10,
+                plots: [],
+                unlockedPlots: INITIAL_UNLOCKED,
+                premiumUntil: null,
+                lastUpdate: Date.now()
+            };
+            for (let i = 0; i < MAX_PLOTS; i++) {
+                farmData.plots[i] = { state: 'empty', endTime: null };
+            }
+        }
+
+        function saveToCloud() {
+            farmData.lastUpdate = Date.now();
+            const encrypted = encryptData(farmData);
+            tg.CloudStorage.setItem('farmData', encrypted, (err) => {
+                if (err) console.warn('Ошибка сохранения:', err);
+            });
+        }
+
+        // --- ОПРЕДЕЛЕНИЕ БОНУСОВ ПОДПИСКИ ---
+        function isPremiumActive() {
+            return farmData.premiumUntil && farmData.premiumUntil > Date.now();
+        }
+
+        function getGrowTime() {
+            return isPremiumActive() ? GROW_TIME_PREMIUM : GROW_TIME_BASE;
+        }
+
+        function getReward() {
+            return isPremiumActive() ? REWARD_PREMIUM : REWARD_BASE;
+        }
+
+        // --- ЛОГИКА ГРЯДОК ---
+        function handlePlotClick(index) {
+            // Если грядка заблокирована – ничего
+            if (index >= farmData.unlockedPlots) return;
+
+            const plot = farmData.plots[index];
+            const now = Date.now();
+
+            if (plot.state === 'empty') {
+                // Посадка: нужно 5 монет
+                if (farmData.balance < 5) {
+                    tg.showAlert('Недостаточно монет! Купите ещё.');
+                    return;
+                }
+                farmData.balance -= 5;
+                plot.state = 'growing';
+                plot.endTime = now + getGrowTime();
+                saveAndRender();
+            }
+            else if (plot.state === 'growing') {
+                // Если ещё растёт – ничего не делаем
+                if (plot.endTime > now) return;
+                // Если время вышло, автоматически переводим в ready (таймер это сделает, но на всякий случай)
+                plot.state = 'ready';
+                plot.endTime = null;
+                saveAndRender();
+            }
+            else if (plot.state === 'ready') {
+                // Сбор урожая
+                farmData.balance += getReward();
+                plot.state = 'empty';
+                plot.endTime = null;
+                saveAndRender();
+            }
+        }
+
+        // --- ОТРИСОВКА ИНТЕРФЕЙСА ---
+        function renderFarm() {
+            // Баланс
+            document.getElementById('balanceDisplay').innerText = `🪙 ${farmData.balance}`;
+
+            // Статус подписки
+            const premiumDiv = document.getElementById('premiumDisplay');
+            if (isPremiumActive()) {
+                const daysLeft = Math.ceil((farmData.premiumUntil - Date.now()) / (1000 * 60 * 60 * 24));
+                premiumDiv.style.display = 'inline-flex';
+                premiumDiv.innerHTML = `⭐ Premium (${daysLeft} дн.)`;
+            } else {
+                premiumDiv.style.display = 'none';
+            }
+
+            // Отрисовка грядок
+            const container = document.getElementById('plotsContainer');
+            container.innerHTML = '';
+            for (let i = 0; i < MAX_PLOTS; i++) {
+                const plot = farmData.plots[i];
+                const plotDiv = document.createElement('div');
+                plotDiv.className = 'plot';
+
+                if (i >= farmData.unlockedPlots) {
+                    plotDiv.className += ' locked';
+                    plotDiv.innerText = '🔒';
+                } else {
+                    plotDiv.classList.add(plot.state);
+                    if (plot.state === 'empty') {
+                        plotDiv.innerHTML = '🌱<br>посадить (5🪙)';
+                    } else if (plot.state === 'growing') {
+                        const remaining = Math.max(0, Math.ceil((plot.endTime - Date.now()) / 1000));
+                        plotDiv.innerHTML = `🌿<br><span class="timer">${remaining}с</span>`;
+                    } else if (plot.state === 'ready') {
+                        plotDiv.innerHTML = '🌻<br>собрать';
+                    }
+                }
+
+                plotDiv.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    handlePlotClick(i);
+                });
+                container.appendChild(plotDiv);
+            }
+        }
+
+        // --- ТАЙМЕРЫ ДЛЯ ОБНОВЛЕНИЯ ГРЯДОК ---
+        let timerInterval = null;
+        function startTimers() {
+            if (timerInterval) clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                let changed = false;
+                const now = Date.now();
+                for (let i = 0; i < farmData.unlockedPlots; i++) {
+                    const plot = farmData.plots[i];
+                    if (plot.state === 'growing' && plot.endTime <= now) {
+                        plot.state = 'ready';
+                        plot.endTime = null;
+                        changed = true;
+                    }
+                }
+                if (changed) {
+                    renderFarm();
+                    saveToCloud();
+                } else {
+                    // Просто обновим таймеры на экране
+                    renderFarm();
+                }
+            }, 1000);
+        }
+
+        // --- ПОКУПКИ ЧЕРЕЗ STARS ---
+        function buyProduct(slug, callback) {
+            tg.openInvoice(slug, (status) => {
+                if (status === 'paid') {
+                    callback();
+                } else {
+                    tg.showAlert('Платёж не завершён или отменён.');
+                }
+            });
+        }
+
+        // --- СОХРАНЕНИЕ И ПЕРЕРИСОВКА ---
+        function saveAndRender() {
+            renderFarm();
+            saveToCloud();
+        }
+
+        // --- ПОДГОТОВКА СОБЫТИЙ ---
+        document.addEventListener('DOMContentLoaded', () => {
+            // Загружаем данные
+            loadFromCloud();
+
+            // Магазин (модалка)
+            const modal = document.getElementById('shopModal');
+            document.getElementById('shopBtn').addEventListener('click', () => {
+                modal.classList.add('active');
+            });
+            document.getElementById('closeShop').addEventListener('click', () => {
+                modal.classList.remove('active');
+            });
+
+            // Кнопки покупок
+            document.getElementById('buyCoins50').addEventListener('click', () => {
+                buyProduct(PRODUCTS.coins50, () => {
+                    farmData.balance += 50;
+                    saveAndRender();
+                    tg.showAlert('+50 монет!');
+                });
+            });
+
+            document.getElementById('buyCoins200').addEventListener('click', () => {
+                buyProduct(PRODUCTS.coins200, () => {
+                    farmData.balance += 200;
+                    saveAndRender();
+                    tg.showAlert('+200 монет!');
+                });
+            });
+
+            document.getElementById('buyPremium').addEventListener('click', () => {
+                buyProduct(PRODUCTS.premium30, () => {
+                    farmData.premiumUntil = Date.now() + 30 * 24 * 60 * 60 * 1000;
+                    // Подписка открывает одну дополнительную грядку, если есть заблокированная
+                    if (farmData.unlockedPlots < MAX_PLOTS) {
+                        farmData.unlockedPlots++;
+                    }
+                    saveAndRender();
+                    tg.showAlert('Премиум активирован на 30 дней!');
+                });
+            });
+
+            document.getElementById('buyPlot').addEventListener('click', () => {
+                if (farmData.balance < 50) {
+                    tg.showAlert('Недостаточно монет!');
+                    return;
+                }
+                if (farmData.unlockedPlots >= MAX_PLOTS) {
+                    tg.showAlert('Все грядки уже открыты!');
+                    return;
+                }
+                farmData.balance -= 50;
+                farmData.unlockedPlots++;
+                saveAndRender();
+            });
+        });
+
+        // Закрытие модалки по клику вне контента (просто для удобства)
+        window.addEventListener('click', (e) => {
+            const modal = document.getElementById('shopModal');
+            if (e.target === modal) {
+                modal.classList.remove('active');
+            }
+        });
+    })();
+</script>
+</body>
+</html>
